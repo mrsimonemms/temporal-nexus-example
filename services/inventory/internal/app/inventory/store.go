@@ -96,8 +96,9 @@ func (s *Store) Allocate(req AllocateStockInput) AllocateStockResult {
 
 	if available < req.Quantity {
 		return AllocateStockResult{
-			Status:  AllocationStatusInsufficientStock,
-			Message: fmt.Sprintf("requested %d of %s but only %d available", req.Quantity, req.SKU, available),
+			Status:    AllocationStatusInsufficientStock,
+			Message:   fmt.Sprintf("requested %d of %s but only %d available", req.Quantity, req.SKU, available),
+			Available: &available,
 		}
 	}
 

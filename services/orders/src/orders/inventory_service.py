@@ -33,6 +33,7 @@ STOCK_UNKNOWN_PRODUCT = "unknown_product"
 # Values of AllocateStockResult.status. Anything other than "allocated" is a
 # business rejection: no stock was consumed.
 ALLOCATION_ALLOCATED = "allocated"
+ALLOCATION_INSUFFICIENT_STOCK = "insufficient_stock"
 ALLOCATION_REJECTIONS = (
     "unknown_product",
     "invalid_quantity",
@@ -76,6 +77,9 @@ class AllocateStockResult:
     # Present only when status is "allocated".
     allocation: Allocation | None = None
     message: str = ""
+    # Present only when status is "insufficient_stock": the quantity seen by
+    # Inventory's atomic allocation check.
+    available: int | None = None
 
 
 # Service: the named collection of Operations.

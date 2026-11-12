@@ -23,6 +23,7 @@ with workflow.unsafe.imports_passed_through():
     from orders.activities import OrderActivities
     from orders.inventory_service import (
         ALLOCATION_ALLOCATED,
+        ALLOCATION_INSUFFICIENT_STOCK,
         ALLOCATION_REJECTIONS,
         INVENTORY_ENDPOINT,
         STOCK_FOUND,
@@ -74,6 +75,21 @@ def parse_request(raw: Any) -> OrderInput:
     )
 
 
+def insufficient_stock(sku: str, requested: int, available: int) -> ApplicationError:
+    """Structured, non-retryable failure. Type, message and details are visible
+    in Temporal UI and CLI."""
+    return ApplicationError(
+        f"Insufficient stock for {sku}: requested {requested}, available {available}",
+        {
+            "sku": sku,
+            "requestedQuantity": requested,
+            "availableQuantity": available,
+        },
+        type="INSUFFICIENT_STOCK",
+        non_retryable=True,
+    )
+
+
 def invalid_request(message: str) -> ApplicationError:
     # Non-retryable: an invalid request will never succeed on retry.
     return ApplicationError(message, type="InvalidRequest", non_retryable=True)
@@ -109,13 +125,7 @@ class OrderWorkflow:
                 non_retryable=True,
             )
         if stock.available < request.quantity:
-            return OrderResult(
-                status="insufficient_stock",
-                message=(
-                    f"requested {request.quantity} of {request.sku} but only "
-                    f"{stock.available} available; order not recorded"
-                ),
-            )
+            raise insufficient_stock(request.sku, request.quantity, stock.available)
 
         # Allocate stock through the Inventory Nexus Operation. Allocation is
         # authoritative: stock may have changed since the check above.
@@ -132,6 +142,18 @@ class OrderWorkflow:
             schedule_to_close_timeout=ALLOCATE_STOCK_TIMEOUT,
         )
 
+        if allocation_result.status == ALLOCATION_INSUFFICIENT_STOCK:
+            # Use the quantity from the atomic allocation check, not the
+            # earlier (possibly stale) stock check.
+            if allocation_result.available is None:
+                raise ApplicationError(
+                    "insufficient_stock response is missing available",
+                    type="UnexpectedInventoryResponse",
+                    non_retryable=True,
+                )
+            raise insufficient_stock(
+                request.sku, request.quantity, allocation_result.available
+            )
         if allocation_result.status in ALLOCATION_REJECTIONS:
             return OrderResult(
                 status=allocation_result.status,

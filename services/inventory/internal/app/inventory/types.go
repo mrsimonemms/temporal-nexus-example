@@ -65,4 +65,8 @@ type AllocateStockResult struct {
 	Status     AllocationStatus `json:"status"`
 	Allocation *Allocation      `json:"allocation,omitempty"`
 	Message    string           `json:"message,omitempty"`
+	// Available is set only for insufficient_stock. It is the quantity seen
+	// inside the locked allocation check, so it is never stale. A pointer so
+	// that zero available is still sent.
+	Available *int `json:"available,omitempty"`
 }

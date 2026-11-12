@@ -130,13 +130,20 @@ temporal workflow execute --namespace orders --task-queue Orders \
 The Workflow runs check → allocate → record:
 
 1. **Check** stock with Inventory's `check-stock` Nexus Operation. This is
-   informational and reserves nothing. `unknown_product` or
-   `insufficient_stock` stops here.
+   informational and reserves nothing. `unknown_product` stops here.
 2. **Allocate** stock with `allocate-stock`. This is authoritative, because
    stock may have changed since the check. A rejection (`unknown_product`,
-   `invalid_quantity`, `insufficient_stock` or `conflict`) stops here.
+   `invalid_quantity` or `conflict`) stops here.
 3. **Record** the order with both inventory flags `true` and the
    `allocationId`.
+
+Insufficient stock at step 1 or 2 fails the Workflow with a non-retryable
+`INSUFFICIENT_STOCK` error. The message is
+`Insufficient stock for <sku>: requested <n>, available <n>`, and the details
+are `{"sku", "requestedQuantity", "availableQuantity"}`. After an allocation
+rejection, `availableQuantity` comes from Inventory's atomic check. Requesting
+exactly the available quantity succeeds. The error is visible in the Temporal
+UI and with `temporal workflow describe --namespace orders -w <id>`.
 
 If the Workflow stops at steps 1 or 2, the order is **not** recorded. A Nexus
 failure or timeout (2 minutes per Operation) fails the Workflow; it is never
@@ -179,7 +186,8 @@ Nexus:
 {"orderId": "order-1", "customerRef": "cust-1", "sku": "WIDGET-1", "quantity": 2}
 {"status": "allocated", "allocation": {"allocationId": "ALLOC-order-1",
   "orderId": "order-1", "customerRef": "cust-1", "sku": "WIDGET-1", "quantity": 2}}
-{"status": "insufficient_stock", "message": "requested 99 of WIDGET-1 but only 8 available"}
+{"status": "insufficient_stock", "message": "requested 99 of WIDGET-1 but only 8 available",
+  "available": 8}
 ```
 
 The contract is defined in

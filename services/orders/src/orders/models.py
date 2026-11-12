@@ -46,9 +46,10 @@ class Order:
 
 @dataclass
 class OrderResult:
-    # "recorded", "conflict", "unknown_product", "invalid_quantity" or
-    # "insufficient_stock". "recorded" means stock was allocated and the order
-    # saved; it is not shipped. Other statuses mean the order was not recorded.
+    # "recorded", "conflict", "unknown_product" or "invalid_quantity".
+    # "recorded" means stock was allocated and the order saved; it is not
+    # shipped. Other statuses mean the order was not recorded. Insufficient
+    # stock is not a status: it fails the Workflow with INSUFFICIENT_STOCK.
     status: str
     order: Order | None = None
     message: str = ""
