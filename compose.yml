@@ -1,4 +1,24 @@
 services:
+  inventory:
+    build:
+      context: ./services/inventory
+      target: builder
+    environment:
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_API_KEY: ${TEMPORAL_API_KEY:-}
+      TEMPORAL_TLS: ${TEMPORAL_TLS:-false}
+    volumes:
+      - ./services/inventory:/go/app
+    depends_on:
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/readyz"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+
   temporal:
     image: temporalio/temporal
     ports:
