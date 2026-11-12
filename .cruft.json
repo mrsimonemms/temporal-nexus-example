@@ -1,0 +1,18 @@
+{
+  "template": "https://github.com/mrsimonemms/new",
+  "commit": "d1475185875f95f866bfdc9802236a2df5608ec7",
+  "checkout": "main",
+  "context": {
+    "cookiecutter": {
+      "project_name": "temporal-nexus-example",
+      "description": "A Temporal Nexus reference architecture",
+      "author": "Simon Emms <simon@simonemms.com>",
+      "_template": "https://github.com/mrsimonemms/new",
+      "_commit": "d1475185875f95f866bfdc9802236a2df5608ec7"
+    }
+  },
+  "directory": "blank",
+  "skip": [
+    ".git"
+  ]
+}
