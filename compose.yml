@@ -51,6 +51,26 @@ services:
       - /data/temporal.db
     volumes:
       - temporal_data:/data
+    post_start:
+      - command:
+          - /bin/sh
+          - -ec
+          - |
+            until temporal operator cluster health; do
+              sleep 1
+            done
+
+            if temporal operator nexus endpoint get --name inventory; then
+              temporal operator nexus endpoint update \
+                --name inventory \
+                --target-namespace inventory \
+                --target-task-queue Inventory
+            else
+              temporal operator nexus endpoint create \
+                --name inventory \
+                --target-namespace inventory \
+                --target-task-queue Inventory
+            fi
     healthcheck:
       test: ["CMD-SHELL", "temporal operator cluster health"]
       interval: 10s

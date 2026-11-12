@@ -21,7 +21,26 @@ from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from orders.activities import OrderActivities
-    from orders.models import OrderInput, OrderResult
+    from orders.inventory_service import (
+        ALLOCATION_ALLOCATED,
+        ALLOCATION_REJECTIONS,
+        INVENTORY_ENDPOINT,
+        STOCK_FOUND,
+        STOCK_UNKNOWN_PRODUCT,
+        AllocateStockInput,
+        CheckStockInput,
+        InventoryService,
+    )
+    from orders.models import Order, OrderInput, OrderResult
+
+# Long enough for a presenter to stop and restart the Inventory worker while
+# an order waits on the stock check. On timeout the Workflow fails; it never
+# assumes stock is available.
+CHECK_STOCK_TIMEOUT = timedelta(minutes=2)
+
+# Same convention as the stock check. On timeout the Workflow fails; it never
+# assumes stock was allocated.
+ALLOCATE_STOCK_TIMEOUT = timedelta(minutes=2)
 
 
 def parse_request(raw: Any) -> OrderInput:
@@ -67,16 +86,83 @@ class OrderWorkflow:
         """Input: {"orderId", "customerRef", "sku", "quantity"}."""
         request = parse_request(raw_request)
 
-        # PLACEHOLDER (inventory): check available stock for request.sku via
-        # the Inventory Nexus Operation. Not implemented yet.
+        # Check stock through the Inventory Nexus Operation. Infrastructure
+        # failures and timeouts raise and fail this Workflow.
+        inventory = workflow.create_nexus_client(
+            service=InventoryService, endpoint=INVENTORY_ENDPOINT
+        )
+        stock = await inventory.execute_operation(
+            InventoryService.check_stock,
+            CheckStockInput(sku=request.sku),
+            schedule_to_close_timeout=CHECK_STOCK_TIMEOUT,
+        )
 
-        # PLACEHOLDER (inventory): allocate request.quantity of request.sku to
-        # request.customerRef via the Inventory Nexus Operation, keyed by
-        # request.orderId. Not implemented yet.
+        if stock.status == STOCK_UNKNOWN_PRODUCT:
+            return OrderResult(
+                status="unknown_product",
+                message=f"unknown product {request.sku}; order not recorded",
+            )
+        if stock.status != STOCK_FOUND:
+            raise ApplicationError(
+                f"unexpected stock status {stock.status!r}",
+                type="UnexpectedInventoryResponse",
+                non_retryable=True,
+            )
+        if stock.available < request.quantity:
+            return OrderResult(
+                status="insufficient_stock",
+                message=(
+                    f"requested {request.quantity} of {request.sku} but only "
+                    f"{stock.available} available; order not recorded"
+                ),
+            )
+
+        # Allocate stock through the Inventory Nexus Operation. Allocation is
+        # authoritative: stock may have changed since the check above.
+        # Inventory uses the order ID as the idempotency key, so retrying an
+        # order does not consume stock twice.
+        allocation_result = await inventory.execute_operation(
+            InventoryService.allocate_stock,
+            AllocateStockInput(
+                orderId=request.orderId,
+                customerRef=request.customerRef,
+                sku=request.sku,
+                quantity=request.quantity,
+            ),
+            schedule_to_close_timeout=ALLOCATE_STOCK_TIMEOUT,
+        )
+
+        if allocation_result.status in ALLOCATION_REJECTIONS:
+            return OrderResult(
+                status=allocation_result.status,
+                message=(
+                    f"allocation rejected: {allocation_result.message}; "
+                    "order not recorded"
+                ),
+            )
+        if (
+            allocation_result.status != ALLOCATION_ALLOCATED
+            or allocation_result.allocation is None
+        ):
+            raise ApplicationError(
+                f"unexpected allocation status {allocation_result.status!r}",
+                type="UnexpectedInventoryResponse",
+                non_retryable=True,
+            )
+
+        order = Order(
+            orderId=request.orderId,
+            customerRef=request.customerRef,
+            sku=request.sku,
+            quantity=request.quantity,
+            inventoryChecked=True,
+            inventoryAllocated=True,
+            allocationId=allocation_result.allocation.allocationId,
+        )
 
         return await workflow.execute_activity_method(
             OrderActivities.record_order,
-            request,
+            order,
             start_to_close_timeout=timedelta(seconds=10),
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=1),

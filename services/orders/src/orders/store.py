@@ -20,7 +20,7 @@ worker process.
 
 import threading
 
-from orders.models import Order, OrderInput, OrderResult
+from orders.models import Order, OrderResult
 
 
 class OrderStore:
@@ -28,15 +28,15 @@ class OrderStore:
         self._lock = threading.Lock()
         self._orders: dict[str, Order] = {}
 
-    def record(self, request: OrderInput) -> OrderResult:
+    def record(self, order: Order) -> OrderResult:
         """Record an order, using the order ID as the idempotency key."""
         with self._lock:
-            existing = self._orders.get(request.orderId)
+            existing = self._orders.get(order.orderId)
             if existing is not None:
                 if (
-                    existing.customerRef == request.customerRef
-                    and existing.sku == request.sku
-                    and existing.quantity == request.quantity
+                    existing.customerRef == order.customerRef
+                    and existing.sku == order.sku
+                    and existing.quantity == order.quantity
                 ):
                     # Identical repeat: return the original record.
                     return OrderResult(status="recorded", order=existing)
@@ -44,17 +44,11 @@ class OrderStore:
                 return OrderResult(
                     status="conflict",
                     message=(
-                        f"order {request.orderId} already exists "
+                        f"order {order.orderId} already exists "
                         "with different details"
                     ),
                 )
 
-            order = Order(
-                orderId=request.orderId,
-                customerRef=request.customerRef,
-                sku=request.sku,
-                quantity=request.quantity,
-            )
             self._orders[order.orderId] = order
 
             return OrderResult(status="recorded", order=order)

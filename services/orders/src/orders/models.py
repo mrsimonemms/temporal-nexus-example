@@ -35,16 +35,20 @@ class Order:
     customerRef: str
     sku: str
     quantity: int
-    # Inventory is not integrated yet. These stay false until the Workflow
-    # checks and allocates stock through Inventory.
+    # True once Inventory has confirmed enough stock. Checking does not
+    # reserve stock.
     inventoryChecked: bool = False
+    # True once Inventory has allocated (reserved) the stock.
     inventoryAllocated: bool = False
+    # Inventory's allocation reference, using Inventory's field name.
+    allocationId: str | None = None
 
 
 @dataclass
 class OrderResult:
-    # "recorded" or "conflict". "recorded" only means the order was saved;
-    # it is not fulfilled or confirmed.
+    # "recorded", "conflict", "unknown_product", "invalid_quantity" or
+    # "insufficient_stock". "recorded" means stock was allocated and the order
+    # saved; it is not shipped. Other statuses mean the order was not recorded.
     status: str
     order: Order | None = None
     message: str = ""

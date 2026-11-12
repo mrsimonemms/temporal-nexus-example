@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Orders service for the Temporal Nexus workshop demo"
 requires-python = ">=3.10"
 dependencies = [
+  "nexus-rpc==1.5.0",
   "temporalio==1.36.0",
 ]
 

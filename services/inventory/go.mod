@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/mrsimonemms/golang-helpers v0.8.3
+	github.com/nexus-rpc/sdk-go v0.7.0
 	github.com/rs/zerolog v1.35.1
 	github.com/zigflow/helpers v0.2.4
 	go.temporal.io/sdk v1.51.0
@@ -75,7 +76,6 @@ require (
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nexus-rpc/nexus-proto-annotations v0.1.0 // indirect
-	github.com/nexus-rpc/sdk-go v0.7.0 // indirect
 	github.com/opencontainers/runtime-spec v1.3.0 // indirect
 	github.com/pandatix/go-abnf v0.5.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect

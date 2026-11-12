@@ -24,6 +24,7 @@ import (
 	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app"
 	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/activities"
 	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/inventory"
+	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/service"
 	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/workflows"
 	"github.com/rs/zerolog/log"
 	temporal "github.com/zigflow/helpers"
@@ -68,6 +69,16 @@ func exec() error {
 
 	log.Debug().Msg("Registering activities")
 	w.RegisterActivity(acts)
+
+	log.Debug().Msg("Registering Nexus service")
+	svc, err := service.New()
+	if err != nil {
+		return gh.FatalError{
+			Cause: err,
+			Msg:   "Unable to create Nexus service",
+		}
+	}
+	w.RegisterNexusService(svc)
 
 	log.Debug().Msg("Starting health check server")
 	if err := temporal.NewHealthCheck(ctx, []string{app.TaskQueue}, "localhost:3000", c); err != nil {

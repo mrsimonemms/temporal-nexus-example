@@ -14,6 +14,7 @@ A Temporal Nexus reference architecture
   * [Configure and start the worker](#configure-and-start-the-worker)
   * [Run OrderWorkflow](#run-orderworkflow)
   * [Order storage limitations](#order-storage-limitations)
+* [Nexus: inventory operations](#nexus-inventory-operations)
 * [Contributing](#contributing)
   * [Open in a container](#open-in-a-container)
   * [Commit style](#commit-style)
@@ -24,7 +25,9 @@ A Temporal Nexus reference architecture
 
 ## Inventory service
 
-A Go worker on the `Inventory` Task Queue. It does not have Nexus operations yet.
+A Go worker on the `Inventory` Task Queue. It exposes stock checking and
+allocation through Nexus (see
+[Nexus: inventory operations](#nexus-inventory-operations)).
 
 ### Start the worker
 
@@ -117,25 +120,89 @@ Other `TEMPORAL_*` variables are listed in the
 ### Run OrderWorkflow
 
 ```sh
-temporal workflow execute --task-queue Orders --type OrderWorkflow \
-  --workflow-id order-1 \
+temporal workflow execute --namespace orders --task-queue Orders \
+  --type OrderWorkflow --workflow-id order-1 \
   --input '{"orderId":"order-1","customerRef":"cust-1","sku":"WIDGET-1","quantity":2}'
-# {"status":"recorded","order":{"orderId":"order-1",...,
-#   "inventoryChecked":false,"inventoryAllocated":false},"message":""}
+# {"status":"recorded","order":{"orderId":"order-1",...,"inventoryChecked":true,
+#   "inventoryAllocated":true,"allocationId":"ALLOC-order-1"},"message":""}
 ```
 
-`recorded` only means the order was saved. Stock is **not** checked or allocated
-yet. The Workflow has marked placeholders where the Inventory calls will go.
+The Workflow runs check → allocate → record:
 
-The order ID is the idempotency key. Repeating an identical request returns the
-existing order. Reusing the ID with different details returns
-`"status":"conflict"`. An invalid request fails the Workflow with a
-non-retryable `InvalidRequest` error.
+1. **Check** stock with Inventory's `check-stock` Nexus Operation. This is
+   informational and reserves nothing. `unknown_product` or
+   `insufficient_stock` stops here.
+2. **Allocate** stock with `allocate-stock`. This is authoritative, because
+   stock may have changed since the check. A rejection (`unknown_product`,
+   `invalid_quantity`, `insufficient_stock` or `conflict`) stops here.
+3. **Record** the order with both inventory flags `true` and the
+   `allocationId`.
+
+If the Workflow stops at steps 1 or 2, the order is **not** recorded. A Nexus
+failure or timeout (2 minutes per Operation) fails the Workflow; it is never
+treated as success. `recorded` means stock is allocated, not that the order
+has shipped.
+
+The order ID is the idempotency key in both services. Repeating an identical
+order returns the existing allocation and record without consuming stock again.
+Reusing the ID with different details returns `"status":"conflict"`. An
+invalid request fails the Workflow with a non-retryable `InvalidRequest` error.
 
 ### Order storage limitations
 
 Orders are held in the worker's memory. Run exactly **one** Orders worker.
 Restarting it loses all order records.
+
+## Nexus: inventory operations
+
+Orders (`orders` Namespace) calls Inventory (`inventory` Namespace) through
+Nexus:
+
+| Concept | Name |
+| --- | --- |
+| Endpoint | `inventory` (targets Namespace `inventory`, Task Queue `Inventory`) |
+| Service | `inventory` |
+| Operation | `check-stock` (asynchronous, runs `CheckStockWorkflow`) |
+| Operation | `allocate-stock` (asynchronous, runs `AllocateStockWorkflow`) |
+
+`check-stock` request and response JSON:
+
+```json
+{"sku": "WIDGET-1"}
+{"sku": "WIDGET-1", "available": 10, "status": "found"}
+```
+
+`allocate-stock` request and response JSON (`allocation` appears only when
+`status` is `allocated`):
+
+```json
+{"orderId": "order-1", "customerRef": "cust-1", "sku": "WIDGET-1", "quantity": 2}
+{"status": "allocated", "allocation": {"allocationId": "ALLOC-order-1",
+  "orderId": "order-1", "customerRef": "cust-1", "sku": "WIDGET-1", "quantity": 2}}
+{"status": "insufficient_stock", "message": "requested 99 of WIDGET-1 but only 8 available"}
+```
+
+The contract is defined in
+[`service/nexus.go`](services/inventory/internal/app/service/nexus.go) and
+[`types.go`](services/inventory/internal/app/inventory/types.go), and mirrored
+in [`inventory_service.py`](services/orders/src/orders/inventory_service.py).
+Compose creates the endpoint.
+
+To demonstrate, check stock, run an order, then check stock again. Available
+stock drops by the order quantity:
+
+```sh
+temporal workflow execute --namespace inventory --task-queue Inventory \
+  --type CheckStockWorkflow --workflow-id stock-before \
+  --input '{"sku":"WIDGET-1"}'
+temporal workflow execute --namespace orders --task-queue Orders \
+  --type OrderWorkflow --workflow-id demo-order-1 \
+  --input '{"orderId":"demo-order-1","customerRef":"cust-1","sku":"WIDGET-1","quantity":2}'
+temporal workflow show --namespace orders -w demo-order-1 | grep NexusOperation
+temporal workflow execute --namespace inventory --task-queue Inventory \
+  --type CheckStockWorkflow --workflow-id stock-after \
+  --input '{"sku":"WIDGET-1"}'
+```
 
 ## Contributing
 

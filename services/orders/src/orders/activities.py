@@ -14,7 +14,7 @@
 
 from temporalio import activity
 
-from orders.models import OrderInput, OrderResult
+from orders.models import Order, OrderResult
 from orders.store import OrderStore
 
 
@@ -25,11 +25,11 @@ class OrderActivities:
         self._store = store
 
     @activity.defn
-    async def record_order(self, request: OrderInput) -> OrderResult:
-        result = self._store.record(request)
+    async def record_order(self, order: Order) -> OrderResult:
+        result = self._store.record(order)
         activity.logger.info(
             "Orders: record order orderId=%s status=%s",
-            request.orderId,
+            order.orderId,
             result.status,
         )
         return result
