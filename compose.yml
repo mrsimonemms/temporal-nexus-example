@@ -22,6 +22,7 @@ services:
   orders:
     build:
       context: ./services/orders
+      target: dev
     environment:
       TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-orders}

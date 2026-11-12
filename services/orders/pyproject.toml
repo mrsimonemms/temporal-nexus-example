@@ -12,5 +12,10 @@ dependencies = [
   "temporalio==1.36.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "watchfiles==1.3.0",
+]
+
 [project.scripts]
 orders-worker = "orders.worker:main"

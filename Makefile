@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+SHELL := /bin/bash
+
 cruft-update:
 ifeq (,$(wildcard .cruft.json))
 	@echo "Cruft not configured"
@@ -19,3 +21,21 @@ else
 	@cruft check || cruft update --skip-apply-ask --refresh-private-variables
 endif
 .PHONY: cruft-update
+
+check-stock:
+	temporal workflow execute \
+	--namespace inventory \
+	--type CheckStockWorkflow \
+	--task-queue Inventory \
+	--input '{"sku":"WIDGET-1"}'
+.PHONY: check-stock
+
+new-order:
+	@order_id="order-$${RANDOM}"; \
+	temporal workflow execute \
+		--namespace orders \
+		--type OrderWorkflow \
+		--task-queue Orders \
+		--workflow-id "$$order_id" \
+		--input "{\"orderId\":\"$$order_id\",\"customerRef\":\"customer-001\",\"sku\":\"WIDGET-1\",\"quantity\":2}"
+.PHONY: new-order

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM python:3.12-slim
+FROM python:3.12-slim AS base
 ARG GIT_COMMIT
 ARG VERSION
 ENV GIT_COMMIT="${GIT_COMMIT}" \
@@ -23,6 +23,16 @@ WORKDIR /app
 RUN groupadd --gid 1000 app \
     && useradd --uid 1000 --gid app --create-home app
 COPY . .
+
+# Development: editable install so the worker imports the bind-mounted
+# /app/src, and watchfiles restarts it when Python files change (like Air).
+FROM base AS dev
+RUN pip install --no-cache-dir -e ".[dev]"
+USER 1000:1000
+ENTRYPOINT ["watchfiles", "--filter", "python", "--target-type", "command", "orders-worker", "/app/src"]
+
+# Default image: runs the worker directly from a regular install.
+FROM base
 RUN pip install --no-cache-dir .
 USER 1000:1000
 ENTRYPOINT ["orders-worker"]

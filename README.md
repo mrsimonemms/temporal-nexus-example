@@ -12,6 +12,7 @@ A Temporal Nexus reference architecture
 * [Orders service](#orders-service)
   * [Install](#install)
   * [Configure and start the worker](#configure-and-start-the-worker)
+  * [Live reload (Compose)](#live-reload-compose)
   * [Run OrderWorkflow](#run-orderworkflow)
   * [Order storage limitations](#order-storage-limitations)
 * [Nexus: inventory operations](#nexus-inventory-operations)
@@ -116,6 +117,22 @@ Other `TEMPORAL_*` variables are listed in the
 ```sh
 .venv/bin/orders-worker
 ```
+
+### Live reload (Compose)
+
+Compose builds the Orders `dev` image stage. It installs the package in editable
+mode and runs the worker under
+[watchfiles](https://watchfiles.helpmanual.io/cli/), the Python equivalent of
+Air.
+
+* Editing a `.py` file under `services/orders/src` restarts the worker
+  automatically.
+* Dependency changes in `pyproject.toml` need a rebuild:
+  `docker compose up -d --build orders`.
+* Each restart clears the in-memory Orders store.
+
+Without a build target, the Dockerfile builds the normal image, which runs
+`orders-worker` directly.
 
 ### Run OrderWorkflow
 
