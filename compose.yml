@@ -19,6 +19,20 @@ services:
       timeout: 10s
       retries: 3
 
+  orders:
+    build:
+      context: ./services/orders
+    environment:
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-orders}
+      TEMPORAL_API_KEY: ${TEMPORAL_API_KEY:-}
+      TEMPORAL_TLS: ${TEMPORAL_TLS:-false}
+    volumes:
+      - ./services/orders:/app
+    depends_on:
+      temporal:
+        condition: service_healthy
+
   temporal:
     image: temporalio/temporal
     ports:
@@ -31,6 +45,8 @@ services:
       - 0.0.0.0
       - --namespace
       - inventory
+      - --namespace
+      - orders
       - --db-filename
       - /data/temporal.db
     volumes:

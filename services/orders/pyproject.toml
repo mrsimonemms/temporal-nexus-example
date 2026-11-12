@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orders"
+version = "0.1.0"
+description = "Orders service for the Temporal Nexus workshop demo"
+requires-python = ">=3.10"
+dependencies = [
+  "temporalio==1.36.0",
+]
+
+[project.scripts]
+orders-worker = "orders.worker:main"

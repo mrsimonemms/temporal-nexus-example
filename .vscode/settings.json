@@ -7,5 +7,6 @@
     "https://json.schemastore.org/github-workflow.json": [
       ".github/workflows/*.{yml,yaml}"
     ]
-  }
+  },
+  "python.defaultInterpreterPath": "${workspaceFolder}/services/orders/.venv"
 }

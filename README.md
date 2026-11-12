@@ -9,6 +9,11 @@ A Temporal Nexus reference architecture
   * [Workflows](#workflows)
   * [Seeded stock](#seeded-stock)
   * [Limitations](#limitations)
+* [Orders service](#orders-service)
+  * [Install](#install)
+  * [Configure and start the worker](#configure-and-start-the-worker)
+  * [Run OrderWorkflow](#run-orderworkflow)
+  * [Order storage limitations](#order-storage-limitations)
 * [Contributing](#contributing)
   * [Open in a container](#open-in-a-container)
   * [Commit style](#commit-style)
@@ -78,6 +83,59 @@ Stock and allocation records are stored in the worker's memory.
   separate stock.
 * Restarting the worker resets stock to the seeded values and loses all
   allocation records, including idempotency records.
+
+## Orders service
+
+A Python worker on the `Orders` Task Queue. Requires Python 3.10+.
+
+### Install
+
+```sh
+cd services/orders
+python3 -m venv .venv
+.venv/bin/pip install -e .
+```
+
+### Configure and start the worker
+
+Connection settings come from environment variables only. File-based
+configuration (`temporal.toml`) is disabled.
+
+| Variable | Default |
+| --- | --- |
+| `TEMPORAL_ADDRESS` | `localhost:7233` |
+| `TEMPORAL_NAMESPACE` | `default` |
+| `TEMPORAL_API_KEY` | unset (only needed for Temporal Cloud) |
+
+Other `TEMPORAL_*` variables are listed in the
+[environment configuration docs](https://docs.temporal.io/develop/environment-configuration).
+
+```sh
+.venv/bin/orders-worker
+```
+
+### Run OrderWorkflow
+
+```sh
+temporal workflow execute --task-queue Orders --type OrderWorkflow \
+  --workflow-id order-1 \
+  --input '{"orderId":"order-1","customerRef":"cust-1","sku":"WIDGET-1","quantity":2}'
+# {"status":"recorded","order":{"orderId":"order-1",...,
+#   "inventoryChecked":false,"inventoryAllocated":false},"message":""}
+```
+
+`recorded` only means the order was saved. Stock is **not** checked or allocated
+yet. The Workflow has marked placeholders where the Inventory calls will go.
+
+The order ID is the idempotency key. Repeating an identical request returns the
+existing order. Reusing the ID with different details returns
+`"status":"conflict"`. An invalid request fails the Workflow with a
+non-retryable `InvalidRequest` error.
+
+### Order storage limitations
+
+Orders are held in the worker's memory. Run exactly **one** Orders worker.
+Restarting it loses all order records.
 
 ## Contributing
 
