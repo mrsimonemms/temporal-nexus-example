@@ -13,21 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package activities
 
-import "context"
+import (
+	"context"
 
-type Activities struct{}
+	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/inventory"
+	"go.temporal.io/sdk/activity"
+)
 
-func (a *Activities) Activity1(ctx context.Context) error {
-	return nil
+// Activities own every read and write of the in-memory store, keeping the
+// Workflows deterministic.
+type Activities struct {
+	store *inventory.Store
 }
 
-// If any activities require dependency injecting setting up (eg, a database
-// connection), you can add a constructor function here.
-//
-// If not, you can just return an empty struct.
-func NewActivities() (*Activities, error) {
-	return &Activities{}, nil
+func (a *Activities) CheckStock(ctx context.Context, input inventory.CheckStockInput) (*inventory.CheckStockResult, error) {
+	result := a.store.CheckStock(input.SKU)
+
+	activity.GetLogger(ctx).Info("Inventory: stock checked",
+		"sku", result.SKU, "available", result.Available, "status", result.Status)
+
+	return &result, nil
+}
+
+func (a *Activities) AllocateStock(ctx context.Context, input inventory.AllocateStockInput) (*inventory.AllocateStockResult, error) {
+	result := a.store.Allocate(input)
+
+	activity.GetLogger(ctx).Info("Inventory: allocation requested",
+		"orderId", input.OrderID, "sku", input.SKU, "quantity", input.Quantity, "status", result.Status)
+
+	return &result, nil
+}
+
+func NewActivities(store *inventory.Store) (*Activities, error) {
+	return &Activities{store: store}, nil
 }

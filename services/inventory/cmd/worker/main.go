@@ -23,6 +23,7 @@ import (
 	gh "github.com/mrsimonemms/golang-helpers"
 	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app"
 	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/activities"
+	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/inventory"
 	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/workflows"
 	"github.com/rs/zerolog/log"
 	temporal "github.com/zigflow/helpers"
@@ -49,9 +50,15 @@ func exec() error {
 	ctx := context.Background()
 
 	log.Debug().Msg("Registering workflows")
-	w.RegisterWorkflow(workflows.Workflow)
+	w.RegisterWorkflow(workflows.CheckStockWorkflow)
+	w.RegisterWorkflow(workflows.AllocateStockWorkflow)
 
-	acts, err := activities.NewActivities()
+	// In-memory stock shared by all Activities in this process. It resets on
+	// restart and requires a single Inventory worker.
+	store := inventory.NewStore(inventory.SeedStock)
+	log.Info().Interface("stock", inventory.SeedStock).Msg("Inventory: seeded in-memory stock")
+
+	acts, err := activities.NewActivities(store)
 	if err != nil {
 		return gh.FatalError{
 			Cause: err,

@@ -5,7 +5,7 @@ services:
       target: builder
     environment:
       TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
-      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-inventory}
       TEMPORAL_API_KEY: ${TEMPORAL_API_KEY:-}
       TEMPORAL_TLS: ${TEMPORAL_TLS:-false}
     volumes:
@@ -29,6 +29,8 @@ services:
       - start-dev
       - --ip
       - 0.0.0.0
+      - --namespace
+      - inventory
       - --db-filename
       - /data/temporal.db
     volumes:

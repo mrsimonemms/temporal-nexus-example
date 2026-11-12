@@ -13,16 +13,58 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package workflows
 
-import "go.temporal.io/sdk/workflow"
+import (
+	"time"
 
-type Input struct {
+	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/activities"
+	"github.com/mrsimonemms/temporal-nexus/example/services/inventory/internal/app/inventory"
+	"go.temporal.io/sdk/temporal"
+	"go.temporal.io/sdk/workflow"
+)
+
+// Activities only touch process memory, so they should finish almost
+// instantly. Business outcomes are returned as values, so retries only cover
+// infrastructure failures (eg, the worker stopping mid-Activity).
+var activityOptions = workflow.ActivityOptions{
+	StartToCloseTimeout: 10 * time.Second,
+	RetryPolicy: &temporal.RetryPolicy{
+		InitialInterval:    time.Second,
+		BackoffCoefficient: 2,
+		MaximumInterval:    10 * time.Second,
+		MaximumAttempts:    5,
+	},
 }
 
-type Output struct{}
+var a *activities.Activities
 
-func Workflow(ctx workflow.Context, input *Input) (*Output, error) {
-	return nil, nil
+// CheckStockWorkflow reports the available stock for a SKU. It does not
+// change stock.
+func CheckStockWorkflow(ctx workflow.Context, input inventory.CheckStockInput) (*inventory.CheckStockResult, error) {
+	ctx = workflow.WithActivityOptions(ctx, activityOptions)
+
+	var result inventory.CheckStockResult
+	if err := workflow.ExecuteActivity(ctx, a.CheckStock, input).Get(ctx, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// AllocateStockWorkflow atomically checks availability and allocates stock to
+// a customer. The order ID is the idempotency key.
+func AllocateStockWorkflow(ctx workflow.Context, input inventory.AllocateStockInput) (*inventory.AllocateStockResult, error) {
+	if input.OrderID == "" || input.CustomerRef == "" {
+		return nil, temporal.NewNonRetryableApplicationError("orderId and customerRef are required", "InvalidRequest", nil)
+	}
+
+	ctx = workflow.WithActivityOptions(ctx, activityOptions)
+
+	var result inventory.AllocateStockResult
+	if err := workflow.ExecuteActivity(ctx, a.AllocateStock, input).Get(ctx, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
